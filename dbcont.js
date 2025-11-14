@@ -1,16 +1,13 @@
-const { MongoClient, ObjectId } = require('mongodb');
- 
-const uri = process.env.MONGODB_URI;
-const client = new MongoClient(uri);
- 
-let db; // cached DB handle
- 
-async function connectDB() {
-  if (db) return db;
-  await client.connect();
-  db = client.db('WebApplication'); 
-  console.log('Connections to MongoDB established');
-  return db;
+import mongoose from "mongoose";
+import dotenv from "dotenv";
+
+dotenv.config();
+
+export async function connectDB() {
+  try {
+    await mongoose.connect(process.env.MONGO_URI);
+    console.log(" MongoDB Connected");
+  } catch (error) {
+    console.log("MongoDB Error:", error.message);
+  }
 }
- 
-module.exports = { connectDB, ObjectId };
