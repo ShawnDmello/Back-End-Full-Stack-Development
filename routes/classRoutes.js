@@ -1,18 +1,27 @@
 import express from "express";
-import { classes } from "../models/Class.js";
+import Class from "../models/Class.js";  // Mongoose model
 
 const router = express.Router();
 
-// GET all classes
-router.get("/", (req, res) => {
-  res.json(classes);
+// GET all classes from MongoDB
+router.get("/", async (req, res) => {
+  try {
+    const allClasses = await Class.find(); 
+    res.json(allClasses);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch classes" });
+  }
 });
 
-// ADD new class
-router.post("/", (req, res) => {
-  const newClass = { id: Date.now(), ...req.body };
-  classes.push(newClass);
-  res.json(newClass);
+// ADD new class to MongoDB
+router.post("/", async (req, res) => {
+  try {
+    const newClass = new Class(req.body);
+    await newClass.save();
+    res.json(newClass);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to create class" });
+  }
 });
 
 export default router;
