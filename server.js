@@ -4,7 +4,7 @@ import dotenv from "dotenv";
 import { connectDB } from "./dbcont.js";
 import classroutes from "./routes/classRoutes.js";
 import orderroutes from "./routes/orderRoutes.js";
-import { classes } from "../models/Class.js";
+
 
 dotenv.config();
 
