@@ -1,5 +1,5 @@
 import express from "express";
-import { connectDB, ObjectId } from "./dbcont.js";
+import { connectDB, ObjectId } from "../dbcont.js";
 
 const router = express.Router();
 
@@ -38,4 +38,5 @@ router.put("/:id", async (req, res) => {
 });
 
 export default router;
+
 
