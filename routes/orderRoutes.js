@@ -5,11 +5,15 @@ const router = express.Router();
 
 // POST /api/orders – create a new order
 router.post("/", async (req, res) => {
+  console.log(">>> POST /api/orders hit");
+  console.log("Request body:", req.body);
+
   try {
     const db = await connectDB();
     const { name, phone, lessonIDs, spaces } = req.body;
 
     if (!name || !phone || !Array.isArray(lessonIDs) || !Array.isArray(spaces)) {
+      console.log("Invalid order data:", { name, phone, lessonIDs, spaces });
       return res.status(400).json({ error: "Invalid order data" });
     }
 
@@ -22,6 +26,8 @@ router.post("/", async (req, res) => {
     };
 
     const result = await db.collection("orders").insertOne(order);
+    console.log("Order inserted with _id:", result.insertedId);
+
     res.status(201).json({ ...order, _id: result.insertedId });
   } catch (err) {
     console.error("POST /api/orders error (full):", err);
@@ -29,16 +35,5 @@ router.post("/", async (req, res) => {
   }
 });
 
-// GET /api/orders – list all orders
-router.get("/", async (req, res) => {
-  try {
-    const db = await connectDB();
-    const orders = await db.collection("orders").find({}).toArray();
-    res.json(orders);
-  } catch (err) {
-    console.error("GET /api/orders error (full):", err);
-    res.status(500).json({ error: "Failed to fetch orders" });
-  }
-});
-
 export default router;
+
