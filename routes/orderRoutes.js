@@ -4,7 +4,7 @@ import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
 
-import { connectDB } from "./dbcont.js";
+import { connectDB } from "../dbcont.js";
 import classroutes from "./routes/classRoutes.js";
 import orderroutes from "./routes/orderRoutes.js";
 
@@ -65,3 +65,4 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server listening on port ${PORT}`);
 });
+
