@@ -1,26 +1,53 @@
 import express from "express";
-import Class from "../models/Class.js";  // Mongoose model
+import { connectDB, ObjectId } from "../dbcont.js";
 
 const router = express.Router();
 
-// GET all classes from MongoDB
+// GET /api/classes  – return all lessons
 router.get("/", async (req, res) => {
   try {
-    const allClasses = await Class.find(); 
-    res.json(allClasses);
+    const db = await connectDB();
+    const lessons = await db.collection("lessons").find({}).toArray();
+    res.json(lessons);
   } catch (err) {
-    res.status(500).json({ error: "Failed to fetch classes" });
+    console.error("GET /api/classes error:", err);
+    res.status(500).json({ error: "Failed to fetch lessons" });
   }
 });
 
-// ADD new class to MongoDB
+// POST /api/classes  – (optional) create a new lesson if you need it
 router.post("/", async (req, res) => {
   try {
-    const newClass = new Class(req.body);
-    await newClass.save();
-    res.json(newClass);
+    const db = await connectDB();
+    const newLesson = req.body;
+
+    const result = await db.collection("lessons").insertOne(newLesson);
+    res.status(201).json({ ...newLesson, _id: result.insertedId });
   } catch (err) {
-    res.status(500).json({ error: "Failed to create class" });
+    console.error("POST /api/classes error:", err);
+    res.status(500).json({ error: "Failed to create lesson" });
+  }
+});
+
+// PUT /api/classes/:id – update any fields on a lesson (esp. spaces)
+router.put("/:id", async (req, res) => {
+  try {
+    const db = await connectDB();
+    const update = req.body; // e.g. { space: 3 } or { availableInventory: 4 }
+
+    const result = await db.collection("lessons").updateOne(
+      { _id: new ObjectId(req.params.id) },
+      { $set: update }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ error: "Lesson not found" });
+    }
+
+    res.json({ message: "Lesson updated" });
+  } catch (err) {
+    console.error("PUT /api/classes/:id error:", err);
+    res.status(500).json({ error: "Failed to update lesson" });
   }
 });
 
