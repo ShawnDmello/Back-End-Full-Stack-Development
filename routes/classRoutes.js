@@ -3,7 +3,7 @@ import { connectDB, ObjectId } from "../dbcont.js";
 
 const router = express.Router();
 
-// GET /api/classes – return all classes from WebApp.classes
+// GET /api/classes – return all classes
 router.get("/", async (req, res) => {
   try {
     const db = await connectDB();
@@ -15,11 +15,11 @@ router.get("/", async (req, res) => {
   }
 });
 
-// PUT /api/classes/:id – update any fields on a class (e.g. spaces)
+// PUT /api/classes/:id – update any fields on a class
 router.put("/:id", async (req, res) => {
   try {
     const db = await connectDB();
-    const update = req.body; // e.g. { space: 3 } or { availableInventory: 4 }
+    const update = req.body;
 
     const result = await db.collection("classes").updateOne(
       { _id: new ObjectId(req.params.id) },
@@ -38,5 +38,3 @@ router.put("/:id", async (req, res) => {
 });
 
 export default router;
-
-
