@@ -1,4 +1,4 @@
-iimport express from "express";
+import express from "express";
 import { connectDB, ObjectId } from "../dbcont.js";
 
 const router = express.Router();
@@ -54,7 +54,7 @@ router.post("/", async (req, res) => {
       const result = await db.collection("classes").findOneAndUpdate(
         { _id: objectId, availableInventory: { $gte: requested } },
         { $inc: { availableInventory: -requested } },
-        { returnDocument: "after" } // Node driver option to return updated doc
+        { returnDocument: "after" }
       );
 
       // If no document returned, not enough inventory (or class not found)
