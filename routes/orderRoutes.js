@@ -1,16 +1,19 @@
+// routes/orderRoutes.js
+// Replace or add this route to improve order handling: clearer errors and rollback on partial decrements.
+
 import express from "express";
 import { connectDB, ObjectId } from "../dbcont.js";
 
 const router = express.Router();
 
-// GET /api/orders – list all orders
+// GET /api/orders – list all orders (optional)
 router.get("/", async (req, res) => {
   try {
     const db = await connectDB();
     const orders = await db.collection("orders").find({}).toArray();
     return res.json(orders);
   } catch (err) {
-    console.error("GET /api/orders error (full):", err);
+    console.error("GET /api/orders error:", err);
     return res.status(500).json({ error: "Failed to fetch orders" });
   }
 });
@@ -27,7 +30,7 @@ router.post("/", async (req, res) => {
     // Basic validation
     if (!name || !phone || !Array.isArray(lessonIDs) || lessonIDs.length === 0) {
       console.log("Invalid order data:", { name, phone, lessonIDs, spaces });
-      return res.status(400).json({ error: "Invalid order data" });
+      return res.status(400).json({ error: "Invalid order data: name, phone and lessonIDs are required" });
     }
 
     // Normalize spaces array
@@ -36,7 +39,7 @@ router.post("/", async (req, res) => {
       spacesArr = lessonIDs.map(() => 1);
     }
 
-    // Convert lessonIDs to ObjectId and build pairs
+    // Build lesson pairs
     const lessonPairs = lessonIDs.map((id, idx) => ({
       idStr: String(id),
       objectId: new ObjectId(String(id)),
@@ -45,7 +48,7 @@ router.post("/", async (req, res) => {
 
     const decremented = [];
 
-    // Decrement inventory for each lesson
+    // Try to decrement each class atomically (conditional update)
     for (const pair of lessonPairs) {
       const { objectId, requested, idStr } = pair;
 
@@ -56,6 +59,7 @@ router.post("/", async (req, res) => {
       );
 
       if (!result.value) {
+        // Not enough inventory (or class missing). Try to fetch class doc for nicer message
         let classDoc = null;
         try {
           classDoc = await db.collection("classes").findOne({ _id: objectId });
@@ -93,7 +97,7 @@ router.post("/", async (req, res) => {
       console.log(`Decremented ${requested} for lesson ${idStr}; remaining: ${result.value.availableInventory}`);
     }
 
-    // Insert order document
+    // All decrements successful -> insert order doc
     const orderDoc = {
       name,
       phone,
@@ -105,10 +109,10 @@ router.post("/", async (req, res) => {
     const insertResult = await db.collection("orders").insertOne(orderDoc);
     console.log("Order inserted with _id:", insertResult.insertedId);
 
+    // Return created order (with _id) to client
     return res.status(201).json({ ...orderDoc, _id: insertResult.insertedId });
-
   } catch (err) {
-    console.error("POST /api/orders error (full):", err);
+    console.error("POST /api/orders error:", err);
     return res.status(500).json({ error: "Failed to create order" });
   }
 });
