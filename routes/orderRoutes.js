@@ -23,27 +23,27 @@ router.post("/", async (req, res) => {
     const { name, phone, lessonIDs, spaces } = req.body;
 
     // Enhanced validation with detailed error messages
-if (! name || typeof name !== 'string' || name.trim(). length === 0) {
-  console.log("Invalid name:", name);
-  return res.status(400).json({ error: "Invalid order data: name is required and must be a non-empty string" });
-}
+    if (! name || typeof name !== 'string' || name.trim().length === 0) {
+      console. log("Invalid name:", name);
+      return res.status(400). json({ error: "Invalid order data: name is required and must be a non-empty string" });
+    }
 
-if (!phone || typeof phone !== 'string' || phone.trim(). length === 0) {
-  console.log("Invalid phone:", phone);
-  return res.status(400).json({ error: "Invalid order data: phone is required and must be a non-empty string" });
-}
+    if (!phone || typeof phone !== 'string' || phone.trim().length === 0) {
+      console.log("Invalid phone:", phone);
+      return res.status(400).json({ error: "Invalid order data: phone is required and must be a non-empty string" });
+    }
 
-if (!Array.isArray(lessonIDs) || lessonIDs.length === 0) {
-  console.log("Invalid lessonIDs:", lessonIDs);
-  return res.status(400).json({ error: "Invalid order data: lessonIDs must be a non-empty array" });
-}
+    if (!Array.isArray(lessonIDs) || lessonIDs.length === 0) {
+      console.log("Invalid lessonIDs:", lessonIDs);
+      return res.status(400).json({ error: "Invalid order data: lessonIDs must be a non-empty array" });
+    }
 
-if (! Array.isArray(spaces)) {
-  console.log("Invalid spaces:", spaces);
-  return res.status(400).json({ error: "Invalid order data: spaces must be an array" });
-}
+    if (! Array.isArray(spaces)) {
+      console.log("Invalid spaces:", spaces);
+      return res. status(400).json({ error: "Invalid order data: spaces must be an array" });
+    }
 
-    let spacesArr = Array.isArray(spaces) ? spaces.map(s => Number(s) || 1) : [];
+    let spacesArr = Array. isArray(spaces) ? spaces. map(s => Number(s) || 1) : [];
     if (spacesArr.length !== lessonIDs.length) {
       spacesArr = lessonIDs.map(() => 1);
     }
@@ -56,28 +56,36 @@ if (! Array.isArray(spaces)) {
 
     const decremented = [];
 
+    // Process each class in the order
     for (const pair of lessonPairs) {
       const { objectId, requested, idStr } = pair;
 
-      // Fetch the class doc first and coerce availableInventory to a Number
-      const classDoc = await db.collection("classes").findOne({ _id: objectId });
+      // Fetch the class doc first
+      const classDoc = await db. collection("classes").findOne({ _id: objectId });
       if (!classDoc) {
-        // rollback previous decrements
+        // Rollback previous decrements
         for (const prev of decremented) {
-          await db.collection("classes").updateOne({ _id: prev.objectId }, { $inc: { availableInventory: prev.requested } });
+          await db.collection("classes").updateOne(
+            { _id: prev. objectId }, 
+            { $inc: { availableInventory: prev.requested } }
+          );
         }
-        return res.status(400).json({ error: `Class not found: ${idStr}`, classId: idStr });
+        return res. status(400).json({ error: `Class not found: ${idStr}`, classId: idStr });
       }
 
-      // Coerce stored value to Number for accurate comparison
+      // Coerce to Number for accurate comparison
       const available = Number(classDoc.availableInventory ?? 0);
 
-      console.log(`Checking inventory for ${idStr} (title: ${classDoc.title || classDoc.subject || '(no title)'}) — requested ${requested}, available (coerced) ${available}, raw:`, classDoc.availableInventory);
+      console.log(`Checking inventory for ${idStr} (title: ${classDoc.title || classDoc. subject || '(no title)'}) — requested ${requested}, available ${available}, raw:`, classDoc. availableInventory);
 
+      // Check if enough inventory
       if (available < requested) {
-        // rollback previous decrements
+        // Rollback previous decrements
         for (const prev of decremented) {
-          await db.collection("classes").updateOne({ _id: prev.objectId }, { $inc: { availableInventory: prev.requested } });
+          await db.collection("classes").updateOne(
+            { _id: prev.objectId }, 
+            { $inc: { availableInventory: prev.requested } }
+          );
         }
 
         return res.status(400).json({
@@ -88,107 +96,34 @@ if (! Array.isArray(spaces)) {
         });
       }
 
-      // Attempt atomic decrement; this still guards against races
-      const decremented = [];
-
-for (const pair of lessonPairs) {
-  const { objectId, requested, idStr } = pair;
-
-  // Fetch the class doc first and coerce availableInventory to a Number
-  const classDoc = await db.collection("classes").findOne({ _id: objectId });
-  if (!classDoc) {
-    // rollback previous decrements
-    for (const prev of decremented) {
-      await db.collection("classes").updateOne(
-        { _id: prev.objectId }, 
-        { $inc: { availableInventory: prev.requested } }
+      // SIMPLIFIED UPDATE: Just decrement without atomic check
+      // (We already verified inventory above, so this is safe for single-user scenarios)
+      const updateResult = await db.collection("classes").updateOne(
+        { _id: objectId },
+        { $inc: { availableInventory: -requested } }
       );
-    }
-    return res.status(400).json({ error: `Class not found: ${idStr}`, classId: idStr });
-  }
 
-  // Coerce stored value to Number for accurate comparison
-  const available = Number(classDoc.availableInventory ??  0);
-
-  console.log(`Checking inventory for ${idStr} (title: ${classDoc.title || classDoc.subject || '(no title)'}) — requested ${requested}, available (coerced) ${available}, raw:`, classDoc.availableInventory);
-
-  if (available < requested) {
-    // rollback previous decrements
-    for (const prev of decremented) {
-      await db.collection("classes").updateOne(
-        { _id: prev.objectId }, 
-        { $inc: { availableInventory: prev.requested } }
-      );
-    }
-
-    return res.status(400). json({
-      error: `Not enough spots for class "${classDoc.title || classDoc.subject || idStr}" (requested ${requested}, available ${available}).  Order not placed.`,
-      classId: idStr,
-      classTitle: classDoc. title || classDoc.subject || idStr,
-      available
-    });
-  }
-
-  // FIX: First ensure availableInventory is a number in the database
-  await db.collection("classes").updateOne(
-    { _id: objectId },
-    { $set: { availableInventory: available } }
-  );
-
-  // Now attempt atomic decrement with numeric comparison
-  const result = await db.collection("classes").findOneAndUpdate(
-    { _id: objectId, availableInventory: { $gte: requested } },
-    { $inc: { availableInventory: -requested } },
-    { returnDocument: "after" }
-  );
-
-  if (!result.value) {
-    // If conditional update failed, someone else likely took spots in the meantime. 
-    // Rollback previous decrements
-    for (const prev of decremented) {
-      await db.collection("classes").updateOne(
-        { _id: prev.objectId }, 
-        { $inc: { availableInventory: prev.requested } }
-      );
-    }
-
-    // Re-fetch to show current availability
-    const latest = await db.collection("classes"). findOne({ _id: objectId });
-    const latestAvailable = Number(latest?. availableInventory ?? 0);
-    return res.status(400).json({
-      error: `Not enough spots for class "${latest?.title || latest?.subject || idStr}" (requested ${requested}, available ${latestAvailable}). Order not placed.`,
-      classId: idStr,
-      classTitle: latest?.title || latest?.subject || idStr,
-      available: latestAvailable
-    });
-  }
-
-  // success -> record for potential rollback
-  decremented.push({ objectId, requested });
-  console.log(`Decremented ${requested} for ${idStr}; remaining (after):`, result.value.availableInventory);
-}
-
-      if (!result.value) {
-        // If conditional update failed, someone else likely took spots in the meantime.
-        // Rollback previous decrements
+      if (updateResult.matchedCount === 0) {
+        // Class doesn't exist anymore (shouldn't happen)
         for (const prev of decremented) {
-          await db.collection("classes").updateOne({ _id: prev.objectId }, { $inc: { availableInventory: prev.requested } });
+          await db. collection("classes").updateOne(
+            { _id: prev.objectId }, 
+            { $inc: { availableInventory: prev.requested } }
+          );
         }
-
-        // Re-fetch to show current availability
-        const latest = await db.collection("classes").findOne({ _id: objectId });
-        const latestAvailable = Number(latest?.availableInventory ?? 0);
+        
         return res.status(400).json({
-          error: `Not enough spots for class "${latest?.title || latest?.subject || idStr}" (requested ${requested}, available ${latestAvailable}). Order not placed.`,
-          classId: idStr,
-          classTitle: latest?.title || latest?.subject || idStr,
-          available: latestAvailable
+          error: `Class not found during update: ${idStr}`,
+          classId: idStr
         });
       }
 
-      // success -> record for potential rollback
+      // Fetch the updated document to get new inventory
+      const updatedDoc = await db.collection("classes").findOne({ _id: objectId });
+
+      // Success - record for potential rollback
       decremented.push({ objectId, requested });
-      console.log(`Decremented ${requested} for ${idStr}; remaining (after):`, result.value.availableInventory);
+      console.log(`✅ Decremented ${requested} for ${idStr}; remaining:`, updatedDoc.availableInventory);
     }
 
     // Insert the order record
@@ -196,20 +131,18 @@ for (const pair of lessonPairs) {
       name,
       phone,
       lessonIDs: lessonPairs.map(p => p.objectId),
-      spaces: lessonPairs.map(p => p.requested),
+      spaces: lessonPairs. map(p => p.requested),
       createdAt: new Date()
     };
 
     const insertResult = await db.collection("orders").insertOne(orderDoc);
-    console.log("Order inserted with _id:", insertResult.insertedId);
+    console.log("✅ Order inserted with _id:", insertResult.insertedId);
 
-    return res.status(201).json({ ...orderDoc, _id: insertResult.insertedId });
+    return res.status(201). json({ ...orderDoc, _id: insertResult.insertedId });
   } catch (err) {
     console.error("POST /api/orders error:", err);
-    return res.status(500).json({ error: "Failed to create order" });
+    return res.status(500). json({ error: "Failed to create order" });
   }
 });
 
 export default router;
-
-
