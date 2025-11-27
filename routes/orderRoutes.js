@@ -89,11 +89,84 @@ if (! Array.isArray(spaces)) {
       }
 
       // Attempt atomic decrement; this still guards against races
-      const result = await db.collection("classes").findOneAndUpdate(
-        { _id: objectId, availableInventory: { $gte: requested } },
-        { $inc: { availableInventory: -requested } },
-        { returnDocument: "after" }
+      const decremented = [];
+
+for (const pair of lessonPairs) {
+  const { objectId, requested, idStr } = pair;
+
+  // Fetch the class doc first and coerce availableInventory to a Number
+  const classDoc = await db.collection("classes").findOne({ _id: objectId });
+  if (!classDoc) {
+    // rollback previous decrements
+    for (const prev of decremented) {
+      await db.collection("classes").updateOne(
+        { _id: prev.objectId }, 
+        { $inc: { availableInventory: prev.requested } }
       );
+    }
+    return res.status(400).json({ error: `Class not found: ${idStr}`, classId: idStr });
+  }
+
+  // Coerce stored value to Number for accurate comparison
+  const available = Number(classDoc.availableInventory ??  0);
+
+  console.log(`Checking inventory for ${idStr} (title: ${classDoc.title || classDoc.subject || '(no title)'}) — requested ${requested}, available (coerced) ${available}, raw:`, classDoc.availableInventory);
+
+  if (available < requested) {
+    // rollback previous decrements
+    for (const prev of decremented) {
+      await db.collection("classes").updateOne(
+        { _id: prev.objectId }, 
+        { $inc: { availableInventory: prev.requested } }
+      );
+    }
+
+    return res.status(400). json({
+      error: `Not enough spots for class "${classDoc.title || classDoc.subject || idStr}" (requested ${requested}, available ${available}).  Order not placed.`,
+      classId: idStr,
+      classTitle: classDoc. title || classDoc.subject || idStr,
+      available
+    });
+  }
+
+  // FIX: First ensure availableInventory is a number in the database
+  await db.collection("classes").updateOne(
+    { _id: objectId },
+    { $set: { availableInventory: available } }
+  );
+
+  // Now attempt atomic decrement with numeric comparison
+  const result = await db.collection("classes").findOneAndUpdate(
+    { _id: objectId, availableInventory: { $gte: requested } },
+    { $inc: { availableInventory: -requested } },
+    { returnDocument: "after" }
+  );
+
+  if (!result.value) {
+    // If conditional update failed, someone else likely took spots in the meantime. 
+    // Rollback previous decrements
+    for (const prev of decremented) {
+      await db.collection("classes").updateOne(
+        { _id: prev.objectId }, 
+        { $inc: { availableInventory: prev.requested } }
+      );
+    }
+
+    // Re-fetch to show current availability
+    const latest = await db.collection("classes"). findOne({ _id: objectId });
+    const latestAvailable = Number(latest?. availableInventory ?? 0);
+    return res.status(400).json({
+      error: `Not enough spots for class "${latest?.title || latest?.subject || idStr}" (requested ${requested}, available ${latestAvailable}). Order not placed.`,
+      classId: idStr,
+      classTitle: latest?.title || latest?.subject || idStr,
+      available: latestAvailable
+    });
+  }
+
+  // success -> record for potential rollback
+  decremented.push({ objectId, requested });
+  console.log(`Decremented ${requested} for ${idStr}; remaining (after):`, result.value.availableInventory);
+}
 
       if (!result.value) {
         // If conditional update failed, someone else likely took spots in the meantime.
@@ -138,4 +211,5 @@ if (! Array.isArray(spaces)) {
 });
 
 export default router;
+
 
