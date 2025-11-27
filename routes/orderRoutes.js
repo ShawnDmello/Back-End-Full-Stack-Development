@@ -1,12 +1,8 @@
-// routes/orderRoutes.js
-// Replace or add this route to improve order handling: clearer errors and rollback on partial decrements.
-
 import express from "express";
 import { connectDB, ObjectId } from "../dbcont.js";
 
 const router = express.Router();
 
-// GET /api/orders – list all orders (optional)
 router.get("/", async (req, res) => {
   try {
     const db = await connectDB();
@@ -18,7 +14,6 @@ router.get("/", async (req, res) => {
   }
 });
 
-// POST /api/orders – create a new order and decrement inventory
 router.post("/", async (req, res) => {
   console.log(">>> POST /api/orders hit");
   console.log("Request body:", req.body);
@@ -27,19 +22,16 @@ router.post("/", async (req, res) => {
     const db = await connectDB();
     const { name, phone, lessonIDs, spaces } = req.body;
 
-    // Basic validation
     if (!name || !phone || !Array.isArray(lessonIDs) || lessonIDs.length === 0) {
       console.log("Invalid order data:", { name, phone, lessonIDs, spaces });
       return res.status(400).json({ error: "Invalid order data: name, phone and lessonIDs are required" });
     }
 
-    // Normalize spaces array
     let spacesArr = Array.isArray(spaces) ? spaces.map(s => Number(s) || 1) : [];
     if (spacesArr.length !== lessonIDs.length) {
       spacesArr = lessonIDs.map(() => 1);
     }
 
-    // Build lesson pairs
     const lessonPairs = lessonIDs.map((id, idx) => ({
       idStr: String(id),
       objectId: new ObjectId(String(id)),
@@ -48,10 +40,39 @@ router.post("/", async (req, res) => {
 
     const decremented = [];
 
-    // Try to decrement each class atomically (conditional update)
     for (const pair of lessonPairs) {
       const { objectId, requested, idStr } = pair;
 
+      // Fetch the class doc first and coerce availableInventory to a Number
+      const classDoc = await db.collection("classes").findOne({ _id: objectId });
+      if (!classDoc) {
+        // rollback previous decrements
+        for (const prev of decremented) {
+          await db.collection("classes").updateOne({ _id: prev.objectId }, { $inc: { availableInventory: prev.requested } });
+        }
+        return res.status(400).json({ error: `Class not found: ${idStr}`, classId: idStr });
+      }
+
+      // Coerce stored value to Number for accurate comparison
+      const available = Number(classDoc.availableInventory ?? 0);
+
+      console.log(`Checking inventory for ${idStr} (title: ${classDoc.title || classDoc.subject || '(no title)'}) — requested ${requested}, available (coerced) ${available}, raw:`, classDoc.availableInventory);
+
+      if (available < requested) {
+        // rollback previous decrements
+        for (const prev of decremented) {
+          await db.collection("classes").updateOne({ _id: prev.objectId }, { $inc: { availableInventory: prev.requested } });
+        }
+
+        return res.status(400).json({
+          error: `Not enough spots for class "${classDoc.title || classDoc.subject || idStr}" (requested ${requested}, available ${available}). Order not placed.`,
+          classId: idStr,
+          classTitle: classDoc.title || classDoc.subject || idStr,
+          available
+        });
+      }
+
+      // Attempt atomic decrement; this still guards against races
       const result = await db.collection("classes").findOneAndUpdate(
         { _id: objectId, availableInventory: { $gte: requested } },
         { $inc: { availableInventory: -requested } },
@@ -59,45 +80,29 @@ router.post("/", async (req, res) => {
       );
 
       if (!result.value) {
-        // Not enough inventory (or class missing). Try to fetch class doc for nicer message
-        let classDoc = null;
-        try {
-          classDoc = await db.collection("classes").findOne({ _id: objectId });
-        } catch (e) {
-          console.error("Error fetching class doc for error message:", e);
-        }
-
-        const title = classDoc ? (classDoc.title || classDoc.subject || String(idStr)) : String(idStr);
-        const available = classDoc ? (classDoc.availableInventory ?? 0) : 0;
-
-        console.log(`Not enough inventory for lesson ${idStr} (title: ${title}), requested ${requested}, available ${available}`);
-
+        // If conditional update failed, someone else likely took spots in the meantime.
         // Rollback previous decrements
         for (const prev of decremented) {
-          try {
-            await db.collection("classes").updateOne(
-              { _id: prev.objectId },
-              { $inc: { availableInventory: prev.requested } }
-            );
-            console.log(`Rolled back ${prev.requested} for lesson ${String(prev.objectId)}`);
-          } catch (rbErr) {
-            console.error("Rollback error:", rbErr);
-          }
+          await db.collection("classes").updateOne({ _id: prev.objectId }, { $inc: { availableInventory: prev.requested } });
         }
 
+        // Re-fetch to show current availability
+        const latest = await db.collection("classes").findOne({ _id: objectId });
+        const latestAvailable = Number(latest?.availableInventory ?? 0);
         return res.status(400).json({
-          error: `Not enough spots for class "${title}" (requested ${requested}, available ${available}). Order not placed.`,
+          error: `Not enough spots for class "${latest?.title || latest?.subject || idStr}" (requested ${requested}, available ${latestAvailable}). Order not placed.`,
           classId: idStr,
-          classTitle: title,
-          available
+          classTitle: latest?.title || latest?.subject || idStr,
+          available: latestAvailable
         });
       }
 
+      // success -> record for potential rollback
       decremented.push({ objectId, requested });
-      console.log(`Decremented ${requested} for lesson ${idStr}; remaining: ${result.value.availableInventory}`);
+      console.log(`Decremented ${requested} for ${idStr}; remaining (after):`, result.value.availableInventory);
     }
 
-    // All decrements successful -> insert order doc
+    // Insert the order record
     const orderDoc = {
       name,
       phone,
@@ -109,7 +114,6 @@ router.post("/", async (req, res) => {
     const insertResult = await db.collection("orders").insertOne(orderDoc);
     console.log("Order inserted with _id:", insertResult.insertedId);
 
-    // Return created order (with _id) to client
     return res.status(201).json({ ...orderDoc, _id: insertResult.insertedId });
   } catch (err) {
     console.error("POST /api/orders error:", err);
