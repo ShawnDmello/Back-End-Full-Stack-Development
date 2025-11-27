@@ -21,11 +21,12 @@ connectDB().catch((err) => {
 app.use(express.json());
 
 // CORS – allow your GitHub Pages frontend to call the API
-app.use(
+app. use(
   cors({
     origin: "*", // or restrict to your GitHub Pages URL
     methods: ["GET", "POST", "PUT"],
-    allowedHeaders: ["Content-Type"]
+    allowedHeaders: ["Content-Type"],
+    credentials: true
   })
 );
 
@@ -65,3 +66,4 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server listening on port ${PORT}`);
 });
+
