@@ -30,36 +30,32 @@ router.post("/", async (req, res) => {
       return res.status(400).json({ error: "Invalid order data" });
     }
 
-    // Normalize spaces array: if not provided or length mismatch, default to 1 per lesson
+    // Normalize spaces array
     let spacesArr = Array.isArray(spaces) ? spaces.map(s => Number(s) || 1) : [];
     if (spacesArr.length !== lessonIDs.length) {
       spacesArr = lessonIDs.map(() => 1);
     }
 
-    // Convert lessonIDs to ObjectId where necessary and build pairs
+    // Convert lessonIDs to ObjectId and build pairs
     const lessonPairs = lessonIDs.map((id, idx) => ({
       idStr: String(id),
       objectId: new ObjectId(String(id)),
       requested: Math.max(1, Number(spacesArr[idx]) || 1)
     }));
 
-    // We'll keep track of successful decrements to allow rollback on failure
     const decremented = [];
 
-    // For each lesson attempt conditional decrement
+    // Decrement inventory for each lesson
     for (const pair of lessonPairs) {
       const { objectId, requested, idStr } = pair;
 
-      // Attempt to decrement only if enough availableInventory
       const result = await db.collection("classes").findOneAndUpdate(
         { _id: objectId, availableInventory: { $gte: requested } },
         { $inc: { availableInventory: -requested } },
         { returnDocument: "after" }
       );
 
-      // If no document returned, not enough inventory (or class not found)
       if (!result.value) {
-        // fetch class doc to provide a nicer message
         let classDoc = null;
         try {
           classDoc = await db.collection("classes").findOne({ _id: objectId });
@@ -93,12 +89,11 @@ router.post("/", async (req, res) => {
         });
       }
 
-      // success -> record it
       decremented.push({ objectId, requested });
       console.log(`Decremented ${requested} for lesson ${idStr}; remaining: ${result.value.availableInventory}`);
     }
 
-    // All decrements succeeded -> insert the order document
+    // Insert order document
     const orderDoc = {
       name,
       phone,
@@ -110,14 +105,10 @@ router.post("/", async (req, res) => {
     const insertResult = await db.collection("orders").insertOne(orderDoc);
     console.log("Order inserted with _id:", insertResult.insertedId);
 
-    // Return created order (with _id) to client
     return res.status(201).json({ ...orderDoc, _id: insertResult.insertedId });
 
   } catch (err) {
     console.error("POST /api/orders error (full):", err);
-
-    // If something unexpected happened, we should not leave partial decrements.
-    // (This catch won't know which decrements happened; in practice you could track and roll back here.)
     return res.status(500).json({ error: "Failed to create order" });
   }
 });
