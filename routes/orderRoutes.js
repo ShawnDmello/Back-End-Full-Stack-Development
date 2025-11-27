@@ -59,7 +59,19 @@ router.post("/", async (req, res) => {
 
       // If no document returned, not enough inventory (or class not found)
       if (!result.value) {
-        console.log(`Not enough inventory for lesson ${idStr}, requested ${requested}`);
+        // fetch class doc to provide a nicer message
+        let classDoc = null;
+        try {
+          classDoc = await db.collection("classes").findOne({ _id: objectId });
+        } catch (e) {
+          console.error("Error fetching class doc for error message:", e);
+        }
+
+        const title = classDoc ? (classDoc.title || classDoc.subject || String(idStr)) : String(idStr);
+        const available = classDoc ? (classDoc.availableInventory ?? 0) : 0;
+
+        console.log(`Not enough inventory for lesson ${idStr} (title: ${title}), requested ${requested}, available ${available}`);
+
         // Rollback previous decrements
         for (const prev of decremented) {
           try {
@@ -74,7 +86,10 @@ router.post("/", async (req, res) => {
         }
 
         return res.status(400).json({
-          error: `Not enough spots for class ${idStr} (requested ${requested}). Order not placed.`
+          error: `Not enough spots for class "${title}" (requested ${requested}, available ${available}). Order not placed.`,
+          classId: idStr,
+          classTitle: title,
+          available
         });
       }
 
