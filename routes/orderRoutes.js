@@ -22,10 +22,26 @@ router.post("/", async (req, res) => {
     const db = await connectDB();
     const { name, phone, lessonIDs, spaces } = req.body;
 
-    if (!name || !phone || !Array.isArray(lessonIDs) || lessonIDs.length === 0) {
-      console.log("Invalid order data:", { name, phone, lessonIDs, spaces });
-      return res.status(400).json({ error: "Invalid order data: name, phone and lessonIDs are required" });
-    }
+    // Enhanced validation with detailed error messages
+if (! name || typeof name !== 'string' || name.trim(). length === 0) {
+  console.log("Invalid name:", name);
+  return res.status(400).json({ error: "Invalid order data: name is required and must be a non-empty string" });
+}
+
+if (!phone || typeof phone !== 'string' || phone.trim(). length === 0) {
+  console.log("Invalid phone:", phone);
+  return res.status(400).json({ error: "Invalid order data: phone is required and must be a non-empty string" });
+}
+
+if (!Array.isArray(lessonIDs) || lessonIDs.length === 0) {
+  console.log("Invalid lessonIDs:", lessonIDs);
+  return res.status(400).json({ error: "Invalid order data: lessonIDs must be a non-empty array" });
+}
+
+if (! Array.isArray(spaces)) {
+  console.log("Invalid spaces:", spaces);
+  return res.status(400).json({ error: "Invalid order data: spaces must be an array" });
+}
 
     let spacesArr = Array.isArray(spaces) ? spaces.map(s => Number(s) || 1) : [];
     if (spacesArr.length !== lessonIDs.length) {
@@ -122,3 +138,4 @@ router.post("/", async (req, res) => {
 });
 
 export default router;
+
