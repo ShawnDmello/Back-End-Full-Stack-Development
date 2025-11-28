@@ -1,13 +1,13 @@
 # Backend Setup Guide - Online Classes API
 
-## 📋 Prerequisites
+##  Prerequisites
 
 - Node.js (v18 or higher)
 - MongoDB Atlas account
 - Git
 - Postman (for testing)
 
-## 🚀 Setup Instructions
+##  Setup Instructions
 
 ### 1. Create MongoDB Atlas Database
 
@@ -117,7 +117,7 @@ Server should start on: `http://localhost:3000`
 - URL: `http://localhost:3000/search?q=maths`
 - Expected: Lessons matching "maths"
 
-## 🌐 Deploy to Render.com
+##  Deploy to Render.com
 
 ### 1. Create GitHub Repository
 
@@ -163,7 +163,7 @@ Test with Postman using your Render URL:
 - `https://online-classes-api.onrender.com/orders`
 - etc.
 
-## 📁 Project Structure
+##  Project Structure
 
 ```
 online-classes-backend/
@@ -175,7 +175,7 @@ online-classes-backend/
 └── README.md             # This file
 ```
 
-## 🔧 API Endpoints
+##  API Endpoints
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -184,7 +184,7 @@ online-classes-backend/
 | PUT | `/lessons/:id` | Update lesson spaces |
 | GET | `/search?q=query` | Search lessons |
 
-## 🧪 Testing Checklist
+##  Testing Checklist
 
 - [ ] GET /lessons returns all lessons
 - [ ] POST /orders creates order in database
@@ -194,14 +194,14 @@ online-classes-backend/
 - [ ] Static file middleware serves images (if added)
 - [ ] CORS allows front-end connection
 
-## 📝 Notes
+##  Notes
 
 - Server uses native MongoDB driver (no Mongoose)
 - CORS is enabled for front-end connection
 - Logger middleware logs all requests to console
 - Static file middleware serves images from /public folder
 
-## 🐛 Troubleshooting
+##  Troubleshooting
 
 **MongoDB connection fails:**
 - Check connection string has correct password
@@ -217,7 +217,7 @@ online-classes-backend/
 - Ensure `cors()` middleware is used in server.js
 - Check front-end is making requests to correct URL
 
-## 📚 Resources
+##  Resources
 
 - Express.js: https://expressjs.com/
 - MongoDB Atlas: https://www.mongodb.com/cloud/atlas
