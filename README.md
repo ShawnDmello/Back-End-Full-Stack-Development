@@ -9,7 +9,7 @@
 
 ##  Setup Instructions
 
-### 1. Create MongoDB Atlas Database
+### 1. MongoDB Atlas Database
 
 1. Go to https://www.mongodb.com/cloud/atlas
 2. Sign up or log in
